@@ -1,0 +1,7 @@
+INCLUDES += -I$(RIOTBASE)/cpu/stm32f0/include
+
+export UNDEF += $(BINDIR)cpu/syscalls.o
+export UNDEF += $(BINDIR)cpu/hwtimer_cpu.o
+export UNDEF += $(BINDIR)cpu/cpu.o
+
+export USEMODULE += libopencm3_stm32f0

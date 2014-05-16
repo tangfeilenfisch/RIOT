@@ -83,7 +83,7 @@ BASELIBS += $(BINDIR)$(BOARD)_base.a
 BASELIBS += $(BINDIR)${PROJECT}.a
 BASELIBS += $(USEPKG:%=${BINDIR}%.a)
 
-.PHONY: all clean flash doc term objsize buildsize buildsizes buildsizes-diff
+.PHONY: all clean flash doc term objsize buildsize buildsizes buildsizes-diff lst
 
 ## make script for your application. Build RIOT-base here!
 all: $(BINDIR)$(PROJECT).a
@@ -286,3 +286,7 @@ buildsizes-diff:
 			for I in 0 1 2 3; do echo -ne "$${NEW[I]-$${RED}ERR$${RESET}}\t"; done; echo -e "$${NEWBIN}\n"; \
 		done; \
 	done;
+
+lst: $(BINDIR)$(PROJECT).elf
+	@printf "  OBJDUMP $(BINDIR)$(PROJECT).lst\n"
+	@$(OBJDUMP) -St $< > $(BINDIR)$(PROJECT).lst

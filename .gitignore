@@ -6,5 +6,7 @@ doc/doxygen/*.log
 *bin
 *~
 *.orig
+*.d
 .*.swp
 cachegrind.out*
+tags
