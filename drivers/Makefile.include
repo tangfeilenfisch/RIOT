@@ -10,3 +10,6 @@ endif
 ifneq (,$(filter at86rf231,$(USEMODULE)))
     USEMODULE_INCLUDES += $(RIOTBASE)/drivers/at86rf231/include
 endif
+ifneq (,$(filter nrf51822ble,$(USEMODULE)))
+    USEMODULE_INCLUDES += $(RIOTBASE)/sys/ble/include
+endif

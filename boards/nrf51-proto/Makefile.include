@@ -1,0 +1,55 @@
+## the cpu to build for
+export CPU = nrf51822
+
+# toolchain config
+export PREFIX = arm-none-eabi
+export CC = $(PREFIX)-gcc
+export AR = $(PREFIX)-ar
+export AS = $(PREFIX)-as
+export LINK = $(PREFIX)-gcc
+export SIZE = $(PREFIX)-size
+export OBJCOPY = $(PREFIX)-objcopy
+export OBJDUMP = $(PREFIX)-objdump
+
+
+LIBOPENCM3DIR = $(RIOTCPU)/libopencm3
+LDSCRIPT = $(RIOTCPU)/$(CPU)/nrf51822.ld
+ARCH_FLAGS = -mthumb -mcpu=cortex-m0 -msoft-float
+
+
+export CFLAGS += -ggdb -g3 -Os -Wall \
+                 -Wstrict-prototypes -Wextra \
+                 -fno-common -ffunction-sections -fno-builtin\
+		 $(ARCH_FLAGS) -MD -DNRF51822 \
+		  -ffreestanding \
+		  -fno-common \
+#		  -fdata-sections
+
+export ASFLAGS = -ggdb -g3 -mcpu=cortex-m0 -msoft-float --mthumb
+
+
+LINKFLAGS = --static -Wl,--start-group -lc -lgcc -lnosys -Wl,--end-group \
+            -L$(LIBOPENCM3DIR)/lib \
+            -T$(LDSCRIPT) -nostartfiles -Wl,--gc-sections \
+            $(ARCH_FLAGS) -mfix-cortex-m3-ldrd \
+#            -nodefaultlibs
+
+LINKFLAGS += -L$(LIBOPENCM3DIR)/lib -L$(LIBOPENCM3DIR)/lib/nrf51/nrf51822
+
+ifeq ($(strip $(PORT)),)
+	export PORT = /dev/ttyUSB0
+endif
+export HEXFILE = $(BINDIR)$(PROJECT).hex
+export FFLAGS = $(HEXFILE)
+
+export ELFFILE = $(BINDIR)/$(PROJECT).elf
+export DEBUGGER_FLAGS = $(ELFFILE)
+
+export INCLUDES += -I$(RIOTBOARD)/$(BOARD)/include/ -I$(RIOTCPU)/$(CPU)/include
+export INCLUDES += -I$(LIBOPENCM3DIR)/include/
+#export OFLAGS = -O binary
+export OFLAGS = -O ihex
+
+export UNDEF += $(BINDIR)cpu/startup.o
+export UNDEF += $(BINDIR)$(BOARD)_base/nrf51822-uart0.o
+export UNDEF += $(BINDIR)nrf51822ble/nrf51822_phy.o

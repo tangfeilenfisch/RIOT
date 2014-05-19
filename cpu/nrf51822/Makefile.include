@@ -1,0 +1,7 @@
+INCLUDES += -I$(RIOTBASE)/cpu/nrf51822/include
+
+export UNDEF += $(BINDIR)cpu/syscalls.o
+export UNDEF += $(BINDIR)cpu/hwtimer_cpu.o
+export UNDEF += $(BINDIR)cpu/cpu.o
+
+export USEMODULE += libopencm3_nrf51822
