@@ -23,6 +23,7 @@ export CFLAGS += -ggdb -g3 -Os -Wall \
 		 $(ARCH_FLAGS) -MD -DNRF51822 \
 		  -ffreestanding \
 		  -fno-common \
+		  -Wcast-align
 #		  -fdata-sections
 
 export ASFLAGS = -ggdb -g3 -mcpu=cortex-m0 -msoft-float --mthumb

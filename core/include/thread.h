@@ -34,6 +34,14 @@
 #define MINIMUM_STACK_SIZE  (sizeof(tcb_t))
 #endif
 
+#if defined(ARMV6M)
+	typedef uint32_t stack_t;
+#	define ARCH_STACK_SIZE(s)	(s>>2)
+#else
+	typedef uint8_t stack_t;
+#	define ARCH_STACK_SIZE(s)	(s)
+#endif
+
 /**
  * @brief Creates a new thread.
  *

@@ -18,6 +18,8 @@
 #undef UART0_BUFSIZE
 #endif
 #define UART0_BUFSIZE				128
+
+#define	ARMV6M
 /** @} */
 
 #endif /* CPU_CONF_H */
