@@ -35,7 +35,7 @@
 #define PIN_DEBUG4			GPIO8
 #define PIN_DEBUG5			GPIO9
 
-#define PDU_FIFO_LENGTH			8
+#define PDU_FIFO_LENGTH			(1 << 3) /* always the power of 2 */
 
 enum ble_phy_state {
 	phy_s_ready_rx		= 0,
@@ -362,52 +362,44 @@ inline void nrf51phy_notify_transceiver_thread(void)
 	if (link_manager_pid) {
 		msg_t m;
 		m.type = (uint16_t)BLE_PHY_RCV_PKT;
-		m.content.value = phy_data.denoted_event_cntr;
+		m.content.value = phy_data.rx_in_pos;
 		msg_send_int(&m, link_manager_pid);
 	}
 }
 
-inline struct ble_pdu* phy_get_next_rx_buf(void)
+inline struct ble_pdu* phy_get_rx_buf(uint8_t pos)
 {
-	if (phy_data.rx_out_pos == phy_data.rx_in_pos) {
-		return 0;
-	}
-	return (phy_data.rx_buf + phy_data.rx_out_pos);
+	return (phy_data.rx_buf + (pos & (PDU_FIFO_LENGTH - 1)));
 }
 
-inline int phy_free_next_rx_buf(void)
+inline int phy_free_pending_rx_buf(void)
 {
 	if (phy_data.rx_out_pos == phy_data.rx_in_pos) {
 		return 0;
 	}
-	phy_data.rx_out_pos = (phy_data.rx_out_pos + 1) % PDU_FIFO_LENGTH;
+	phy_data.rx_out_pos = (phy_data.rx_out_pos + 1) & (PDU_FIFO_LENGTH - 1);
+	return 1;
+}
+
+inline int phy_rx_data_pending(void)
+{
+	if (phy_data.rx_out_pos == phy_data.rx_in_pos) {
+		return 0;
+	}
 	return 1;
 }
 
 inline struct ble_pdu* phy_get_next_tx_buf(void)
 {
-	uint8_t tmp = phy_data.tx_in_pos;
 	if ((phy_data.tx_in_pos + 1) == phy_data.tx_out_pos) {
 		return 0;
 	}
-	phy_data.tx_in_pos = (phy_data.tx_in_pos + 1) % PDU_FIFO_LENGTH;
-	return (phy_data.tx_buf + tmp);
+	return (phy_data.tx_buf + phy_data.tx_in_pos);
 }
 
-inline static int phy_is_rx_fifo_full(void)
+inline void phy_set_pending_tx_buf(void)
 {
-	if ((phy_data.rx_in_pos + 1) == phy_data.rx_out_pos)
-		return -1;
-	else
-		return 0;
-}
-
-inline static int phy_is_tx_fifo_empty(void)
-{
-	if (phy_data.tx_out_pos == phy_data.tx_in_pos)
-		return -1;
-	else
-		return 0;
+	phy_data.tx_in_pos = (phy_data.tx_in_pos + 1) & (PDU_FIFO_LENGTH - 1);
 }
 
 inline void phy_reset_fifo(void)
@@ -441,13 +433,12 @@ inline static void radio_isr_receiving_data(void)
 		goto do_not_change_nesn;
 	}
 	/* SN and phy_data.nesn are same, rx new data */
-	nrf51phy_notify_transceiver_thread();
-
 	if ((phy_data.rx_in_pos + 1) == phy_data.rx_out_pos) {
 		/* fifo is full, nack */
 		goto do_not_change_nesn;
 	}
-	phy_data.rx_in_pos = (phy_data.rx_in_pos + 1) % PDU_FIFO_LENGTH;
+	nrf51phy_notify_transceiver_thread();
+	phy_data.rx_in_pos = (phy_data.rx_in_pos + 1) & (PDU_FIFO_LENGTH - 1);
 	phy_data.nesn ^= PDUH_DCH_NESN;	/* increment phy_data.nesn */
 
 do_not_change_nesn:
@@ -460,7 +451,7 @@ do_not_change_nesn:
 
 	if (phy_data.s_md ) {
 		/* ack for tx data pending */
-		phy_data.tx_out_pos = (phy_data.tx_out_pos + 1) % PDU_FIFO_LENGTH;
+		phy_data.tx_out_pos = (phy_data.tx_out_pos + 1) & (PDU_FIFO_LENGTH - 1);
 	}
 
 	/* there should be a pdu in tx-fifo, at least a empty-pdu */
@@ -494,7 +485,7 @@ inline static void radio_isr_receiving_adv_state(void)
 
 	/* successfully transmitted and received pdu,
 	 * guess it is a acknowledgement, increment tx-fifo out positon.
-	 * dirty gimmick: look in to pdu header */
+	 * dirty gimmick: look into pdu header */
 	if ((pdu->type & PDUH_ADV_TYPE_MSK) == PDUH_SCAN_REQ) {
 		rf_set_packetptr((void*)(assemb_scanrpdu));
 		phy_data.md = true;
@@ -504,10 +495,10 @@ inline static void radio_isr_receiving_adv_state(void)
 		phy_data.md = false;
 	}
 
-	/* there is not any handshake from peer, 
+	/* there is no any handshake from peer, 
 	 * always increment rx in position */
-	phy_data.rx_in_pos = (phy_data.rx_in_pos + 1) % PDU_FIFO_LENGTH;
 	nrf51phy_notify_transceiver_thread();
+	phy_data.rx_in_pos = (phy_data.rx_in_pos + 1) & (PDU_FIFO_LENGTH - 1);
 }
 
 

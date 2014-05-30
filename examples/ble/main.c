@@ -30,38 +30,63 @@
 #include "shell.h"
 #include "shell_commands.h"
 #include "board_uart0.h"
+#include "debug.h"
 
 #include "blell.h"
 #include "bleci.h"
+#include "blel2cap.h"
 
 #define RCV_BUFFER_SIZE     (64)
-#define RADIO_STACK_SIZE    (KERNEL_CONF_STACKSIZE_DEFAULT)
+#define L2CAP_STACK_SIZE    (KERNEL_CONF_STACKSIZE_DEFAULT)
 
 
-char radio_stack_buffer[RADIO_STACK_SIZE];
+char l2cap_test_stack[L2CAP_STACK_SIZE];
 msg_t msg_q[RCV_BUFFER_SIZE];
 
-void radio(void)
+static void ble_l2cap_read_frame(char *pkt)
+{
+	struct l2cap_fheader *frame = (struct l2cap_fheader *)pkt;
+	switch (frame->ch_id) {
+	case L2CAP_CHID_6LOWPAN:
+		printf("\tlength:\t%u\n", frame->f_length);
+		printf("\tch_id:\t%02x\n", frame->ch_id);
+		for (uint8_t i = 0; i < (frame->f_length); i++) {
+			printf("%02x ", pkt[i + L2CAP_FHEADER_SIZE]);
+		}
+		puts("\n");
+		/*
+		TODO:
+		ble_lowpan_read(data, length, s_addr, d_addr);
+		*/
+		break;
+
+	case L2CAP_CHID_ATT:
+		break;
+
+	case L2CAP_CHID_LE_SIGNALING:
+		break;
+
+	case L2CAP_CHID_SMP:
+		break;
+
+	default:
+		break;
+	}
+}
+
+void l2cap_test(void)
 {
 	msg_t m;
-	struct le_dch_data_pdu *p;
 
 	msg_init_queue(msg_q, RCV_BUFFER_SIZE);
 
 	while (1) {
 		msg_receive(&m);
 
-		if (m.type == BLE_L2CAP_RCV_PKT) {
-			p = (struct le_dch_data_pdu*) m.content.ptr;
-			printf("got ble packet:\n");
-			printf("\ttype:\t%02x\n", p->type);
-			printf("\tlength:\t%u\n", p->length);
-
-			for (uint8_t i = 0; i < p->length; i++) {
-				printf("%02x ", p->data[i]);
-			}
-
-			puts("\n");
+		if (m.type == BLE_L2CAP_PKT_PENDING) {
+			ble_l2cap_read_frame(m.content.ptr);
+			m.type = BLE_L2CAP_PKT_HANDLED;
+			msg_send(&m, m.sender_pid, false);
 		}
 		else if (m.type == BLE_ENOBUFFER) {
 			puts("linklayer buffer full");
@@ -75,16 +100,16 @@ void radio(void)
 void init_ble(void)
 {
 	uint8_t i;
-	int radio_pid = thread_create(radio_stack_buffer,
-					RADIO_STACK_SIZE,
+	int l2cap_test_pid = thread_create(l2cap_test_stack,
+					L2CAP_STACK_SIZE,
 					PRIORITY_MAIN - 2,
 					CREATE_STACKTEST,
-					radio,
-					"radio");
+					l2cap_test,
+					"l2cap");
 
 	ble_linklayer_init();
 	(void) ble_linklayer_start();
-	ble_linklayer_register(radio_pid);
+	ble_linklayer_register(l2cap_test_pid);
 
 	uint8_t rnd_buf[8] = {0x42,0x42,0x42,0x42,0x42,0x42,0,0};
 	uint8_t *adv_data;

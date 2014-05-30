@@ -123,12 +123,6 @@ struct le_connect_req_pdu {
 #define PDUH_DCH_MD		(1 << 4)
 #define PDUH_DCH_FLAG_MSK	(PDUH_DCH_MD | PDUH_DCH_SN | PDUH_DCH_NESN)
 
-struct le_dch_data_pdu {
-	uint8_t type;
-	uint8_t length;
-	uint8_t data[37];
-} __attribute__((packed));
-
 /* link manager */
 
 #define LL_CONNECTION_UPDATE_REQ		0x00
@@ -318,6 +312,14 @@ struct cd_dummy {
 	uint8_t data[36];
 };
 
+struct bmode_fpdu {
+	uint8_t type;
+	uint8_t length;
+	uint16_t f_length;
+	uint16_t ch_id;
+	uint8_t payload[29];
+} __attribute__((packed));
+
 enum linklayer_state {
 	link_standby		= 0,
 	link_advertising	= 1,
@@ -334,7 +336,8 @@ enum blell_message {
 	BLE_PHY_CON_TERM,
 	BLE_CI_ENABLE_ADV,
 	BLE_CI_DISABLE_ADV,
-	BLE_L2CAP_RCV_PKT,
+	BLE_L2CAP_PKT_PENDING,
+	BLE_L2CAP_PKT_HANDLED,
 	BLE_CI_RND_ADR,
 	BLE_CI_ADV_PARAM,
 	BLE_CI_SCANR_PARAM,

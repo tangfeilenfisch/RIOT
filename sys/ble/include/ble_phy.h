@@ -84,9 +84,12 @@ struct ll_connection_udata {
 } __attribute__((packed));
 
 void phy_reset_fifo(void);
-int phy_free_next_rx_buf(void);
 struct ble_pdu* phy_get_next_tx_buf(void);
-struct ble_pdu* phy_get_next_rx_buf(void);
+void phy_set_pending_tx_buf(void);
+struct ble_pdu* phy_get_rx_buf(uint8_t pos);
+int phy_free_pending_rx_buf(void);
+int phy_rx_data_pending(void);
+
 void phy_rng_get_eight(uint8_t *rnd_buf);
 uint8_t phy_get_txpower(void);
 uint8_t phy_get_max_txpower(void);

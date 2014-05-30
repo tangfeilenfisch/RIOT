@@ -1,6 +1,4 @@
 /*
- * This file is part of the riot project.
- *
  * Copyright (C) 2014 Johann Fischer <j.fischer_at_fh-bingen_de>
  *
  * This library is free software: you can redistribute it and/or modify
@@ -24,18 +22,19 @@
 #include "thread.h"
 #include "debug.h"
 #include "blell.h"
+#include "blel2cap.h"
 #include "le_errors.h"
 #include "ad_types.h"
 
 #define LINK_LAYER_STACK_SIZE			512
-char link_manager_stack [LINK_LAYER_STACK_SIZE] __attribute__ ((aligned (32)));
+//char link_manager_stack [LINK_LAYER_STACK_SIZE] __attribute__ ((aligned (32)));
 //char link_manager_stack[LINK_LAYER_STACK_SIZE];	/* hard_fault */
+stack_t link_manager_stack[ARCH_STACK_SIZE(LINK_LAYER_STACK_SIZE)];
 
 int link_manager_pid = -1; ///< the link manager thread's pid
 
-#define BLELL_PAYLOAD_SIZE			27
-#define BLELL_BUFFER_SIZE			48
-uint8_t blell_buf[BLELL_BUFFER_SIZE * BLELL_PAYLOAD_SIZE];
+#define BLE_RECOMB_BUF_SIZE			1280
+uint8_t ble_recomb_buf[BLE_RECOMB_BUF_SIZE];
 
 #define BLELL_MSG_BUFFER_SIZE			64
 msg_t msg_buffer[BLELL_MSG_BUFFER_SIZE];
@@ -389,36 +388,96 @@ static int llrsp_ping_rsp(struct cd_dummy *llcmd)
 	return 0;
 }
 
-static int ll_recv_dch_pdu(void)
+/* Basic L2CAP Mode */
+inline static void ll_frame_recombination(struct bmode_fpdu *fsegment)
+{
+	static uint16_t p_length, i;
+	static bool unreliable;
+
+	DEBUG("type %d, frame length %d, payload length %d\n",
+			(fsegment->type & PDUH_DCH_LLID_MSK),
+			fsegment->length,
+			p_length);
+
+	if ((fsegment->type & PDUH_DCH_LLID_MSK) == PDUH_LLID_START) {
+		if (fsegment->length < L2CAP_FHEADER_SIZE) {
+			return;
+		}
+
+		if (p_length) {
+			p_length = 0;
+			unreliable = true;
+		}
+
+		p_length = fsegment->f_length + L2CAP_FHEADER_SIZE;
+		i = 0;
+		unreliable = false;
+	}
+	else {
+		if (fsegment->length == 0) {
+			/* empty pdu */
+			return;
+		}
+		if (p_length == 0) {
+			unreliable = true;
+			return;
+		}
+	}
+
+	if (fsegment->length > (p_length - i)) {
+		p_length = 0;
+		unreliable = true;
+		return;
+	}
+
+	/* for testing only */
+	if ((i + fsegment->length) > BLE_RECOMB_BUF_SIZE) {
+		p_length = 0;
+		unreliable = true;
+		return;
+	}
+
+	memcpy(ble_recomb_buf + i, &(fsegment->f_length), fsegment->length);
+	i += fsegment->length;
+	if (i == p_length) {
+		p_length = 0;
+		msg_t m;
+		m.type = BLE_L2CAP_PKT_PENDING;
+		m.content.ptr = (char *)ble_recomb_buf;
+		msg_send(&m, blell_data.ulayer_pid, false);
+		llcp_data.reply_pending ++;
+	}
+
+	return;
+}
+
+static int ll_recv_dch_pdu(uint8_t pos)
 {
 	int retval = 0;
-	msg_t m;
-	struct cd_dummy *llcmd = (struct cd_dummy*)phy_get_next_rx_buf();
+	struct cd_dummy *llcmd = (struct cd_dummy*)phy_get_rx_buf(pos);
 	static struct cd_dummy *llrsp;
 
-	if (!llcmd)
-		return 0;
+	if (!llcmd) {
+		return retval;
+	}
+
+	/* FIXME: LLID_CTRL should not be blocked */
+	if (llcp_data.reply_pending) {
+		return retval;
+	}
 
 	switch (llcmd->type & PDUH_DCH_LLID_MSK) {
 	case PDUH_LLID_CONT:
 		/* rest of the fragment or empty (l2cap) pdu */
-		//phy_free_next_rx_buf();
-		//break;
 	case PDUH_LLID_START:
 		/* first or a complete l2cap pdu */
-
-		memcpy(blell_buf, llcmd, sizeof(struct ble_pdu));
-		m.type = BLE_L2CAP_RCV_PKT;
-		m.content.ptr = (char *)blell_buf;
-		msg_send(&m, blell_data.ulayer_pid, false);
-
-		phy_free_next_rx_buf();
+		ll_frame_recombination((struct bmode_fpdu*)llcmd);
+		phy_free_pending_rx_buf();
 		break;
 	case PDUH_LLID_CTRL:
 		llrsp = (struct cd_dummy*)phy_get_next_tx_buf();
 		if (llrsp == 0) {
-			/* wait a little */
-			llcp_data.reply_pending = true;
+			/* maybe next time */
 			break;
 		}
 		llcp_data.last_rx_opcode = llcmd->opcode;
@@ -427,16 +486,14 @@ static int ll_recv_dch_pdu(void)
 			llrsp_unknown_rsp(llrsp);
 		}
 		else {
-			llrsp_unknown_rsp(llrsp);
-			//llcmd_func[llcmd->opcode](llcmd);
+			llcmd_func[llcmd->opcode](llcmd);
 		}
 
-		llcp_data.reply_pending = false;
 		llcp_data.last_tx_opcode = llrsp->opcode;
-		phy_free_next_rx_buf();
+		phy_set_pending_tx_buf();
+		phy_free_pending_rx_buf();
 		break;
 	default:
-		phy_free_next_rx_buf();
 		retval = 0;
 	}
 	return retval;
@@ -474,10 +531,10 @@ static inline void ll_scan_req_rsp(struct ble_pdu *rx_pdu)
 }
 
 /* TODO: add white list handling, with at least one white list record */
-static uint8_t ll_recv_ach_pdu(void)
+static uint8_t ll_recv_ach_pdu(uint8_t pos)
 {
 	uint8_t retval = 0;
-	struct ble_pdu *rx_pdu = phy_get_next_rx_buf();
+	struct ble_pdu *rx_pdu = phy_get_rx_buf(pos);
 
 	if (!rx_pdu)
 		return 0;
@@ -500,19 +557,17 @@ static uint8_t ll_recv_ach_pdu(void)
 	default:
 		retval = 0;
 	}
-	phy_free_next_rx_buf();
+	phy_free_pending_rx_buf();
 	return retval;
 }
 
-static inline void ble_link_recv_packet(uint32_t value)
+static inline void ble_link_recv_packet(uint8_t pos)
 {
-	(void)value;
-
 	if (blell_data.ll_state == link_connection) {
-		ll_recv_dch_pdu();
+		ll_recv_dch_pdu(pos);
 	}
 	else if (blell_data.ll_state == link_advertising) {
-		if (ll_recv_ach_pdu()) {
+		if (ll_recv_ach_pdu(pos)) {
 			blell_data.ll_state = link_connection;
 		}
 	}
@@ -529,7 +584,10 @@ void ble_link_manager(void)
 
 		switch (m.type) {
 		case BLE_PHY_RCV_PKT:
-			ble_link_recv_packet(m.content.value);
+			ble_link_recv_packet((uint8_t)m.content.value);
+			break;
+		case BLE_L2CAP_PKT_HANDLED:
+			llcp_data.reply_pending --;
 			break;
 		case BLE_PHY_CON_ESTBD:
 			/* TODO: notify host*/
@@ -596,15 +654,13 @@ void ble_linklayer_init(void)
 	if (link_manager_pid >= 0) {
 		return;
 	}
-	/* Initializing transceiver buffer and data buffer */
-	memset(blell_buf, 0, BLELL_BUFFER_SIZE * BLELL_PAYLOAD_SIZE);
 	blell_data.ulayer_pid = 0;
 }
 
 /* start the ble phy thread */
 int ble_linklayer_start(void)
 {
-	link_manager_pid = thread_create(link_manager_stack,
+	link_manager_pid = thread_create((char*)link_manager_stack,
 				LINK_LAYER_STACK_SIZE,
 				5,
 				CREATE_STACKTEST,
