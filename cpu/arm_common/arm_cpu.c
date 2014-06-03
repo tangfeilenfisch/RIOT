@@ -73,17 +73,17 @@ void thread_print_stack(void)
     asm("mov %0, sp" : "=r"(stack));
 
     register unsigned int *s = (unsigned int *)stack;
-    printf("task: %X SP: %X\n", (unsigned int) active_thread, (unsigned int) stack);
+    printf("task: %X SP: %X\n", (unsigned int) sched_active_thread, (unsigned int) stack);
     register int i = 0;
     s += 5;
 
     while (*s != STACK_MARKER) {
-        printf("STACK (%u) addr=%X = %X \n", i, (unsigned int) s, (unsigned int) *s);
+        printf("STACK (%d) addr=%X = %X \n", i, (unsigned int) s, (unsigned int) *s);
         s++;
         i++;
     }
 
-    printf("STACK (%u)= %X \n", i, *s);
+    printf("STACK (%d)= %X \n", i, *s);
 }
 
 int reboot_arch(int mode)

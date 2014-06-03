@@ -1,10 +1,11 @@
 /**
  * Native uart0 implementation
  *
- * Copyright (C) 2013 Ludwig Ortmann
+ * Copyright (C) 2014 Ludwig Ortmann <ludwig.ortmann@fu-berlin.de>
  *
- * This file is subject to the terms and conditions of the LGPLv2. See
- * the file LICENSE in the top level directory for more details.
+ * This file is subject to the terms and conditions of the GNU Lesser General
+ * Public License. See the file LICENSE in the top level directory for more
+ * details.
  *
  * @ingroup native_board
  * @{
@@ -92,7 +93,7 @@ void *get_in_addr(struct sockaddr *sa)
 int init_tcp_socket(char *tcpport)
 {
     struct addrinfo hints, *info, *p;
-    int i, s;
+    int i, s = -1;
     if (tcpport == NULL) {
         tcpport = UART_TCPPORT;
     }
@@ -138,7 +139,7 @@ int init_tcp_socket(char *tcpport)
     return s;
 }
 
-int init_unix_socket()
+int init_unix_socket(void)
 {
     int s;
     struct sockaddr_un sa;
@@ -148,7 +149,13 @@ int init_unix_socket()
     }
 
     sa.sun_family = AF_UNIX;
-    snprintf(sa.sun_path, sizeof(sa.sun_path), "/tmp/riot.tty.%d", getpid());
+
+    if (_native_unix_socket_path != NULL) {
+        snprintf(sa.sun_path, sizeof(sa.sun_path), "%s", _native_unix_socket_path);
+    }
+    else {
+        snprintf(sa.sun_path, sizeof(sa.sun_path), "/tmp/riot.tty.%d", _native_pid);
+    }
     unlink(sa.sun_path); /* remove stale socket */
     if (bind(s, (struct sockaddr *)&sa, SUN_LEN(&sa)) == -1) {
         err(EXIT_FAILURE, "init_unix_socket: bind");
@@ -161,7 +168,7 @@ int init_unix_socket()
     return s;
 }
 
-void handle_uart_in()
+void handle_uart_in(void)
 {
     char buf[42];
     int nread;
@@ -198,7 +205,7 @@ void handle_uart_in()
     thread_yield();
 }
 
-void handle_uart_sock()
+void handle_uart_sock(void)
 {
     int s;
     socklen_t t;
@@ -226,7 +233,7 @@ void handle_uart_sock()
 }
 
 #ifdef MODULE_UART0
-void _native_handle_uart0_input()
+void _native_handle_uart0_input(void)
 {
     if (FD_ISSET(STDIN_FILENO, &_native_rfds)) {
         handle_uart_in();

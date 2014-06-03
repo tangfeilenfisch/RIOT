@@ -41,13 +41,13 @@
  */
 void native_cpu_init(void);
 void native_interrupt_init(void);
-extern void native_hwtimer_pre_init();
+extern void native_hwtimer_pre_init(void);
 
-void native_irq_handler();
+void native_irq_handler(void);
 extern void _native_sig_leave_tramp(void);
 
-void _native_syscall_leave();
-void _native_syscall_enter();
+void _native_syscall_leave(void);
+void _native_syscall_enter(void);
 
 /**
  * external functions regularly wrapped in native for direct use
@@ -58,6 +58,7 @@ extern void* (*real_malloc)(size_t size);
 extern void (*real_free)(void *ptr);
 extern void* (*real_calloc)(size_t nmemb, size_t size);
 extern void* (*real_realloc)(void *ptr, size_t size);
+extern int (*real_getpid)(void);
 
 /**
  * data structures
@@ -77,6 +78,8 @@ extern ucontext_t *_native_cur_ctx, *_native_isr_ctx;
 
 extern const char *_progname;
 extern char **_native_argv;
+extern pid_t _native_pid;
+extern const char *_native_unix_socket_path;
 
 #ifdef MODULE_UART0
 #include <sys/select.h>

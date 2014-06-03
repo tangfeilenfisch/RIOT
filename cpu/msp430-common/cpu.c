@@ -20,24 +20,26 @@ volatile int __inISR = 0;
 
 char __isr_stack[MSP430_ISR_STACK_SIZE];
 
-void thread_yield()
+void thread_yield(void)
 {
     __save_context();
 
     dINT();
-    /* have active_thread point to the next thread */
+    /* have sched_active_thread point to the next thread */
     sched_run();
     eINT();
 
     __restore_context();
 }
 
-void cpu_switch_context_exit(void)
+NORETURN void cpu_switch_context_exit(void)
 {
-    active_thread = sched_threads[0];
+    sched_active_thread = sched_threads[0];
     sched_run();
 
     __restore_context();
+
+    UNREACHABLE();
 }
 
 /**
@@ -84,7 +86,7 @@ char *thread_stack_init(void (*task_func)(void), void *stack_start, int stack_si
     return (char *) stackptr;
 }
 
-int inISR()
+int inISR(void)
 {
     return __inISR;
 }

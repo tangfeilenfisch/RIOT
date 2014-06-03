@@ -1,7 +1,7 @@
 /*
  * Copyright (C) 2013 Freie Universität Berlin
  *
- * This file subject to the terms and conditions of the GNU Lesser General
+ * This file is subject to the terms and conditions of the GNU Lesser General
  * Public License. See the file LICENSE in the top level directory for more
  * details.
  */
@@ -158,7 +158,7 @@ int pthread_create(pthread_t *newthread, const pthread_attr_t *attr, void *(*sta
         return -1;
     }
 
-    sched_switch(active_thread->priority, PRIORITY_MAIN);
+    sched_switch(PRIORITY_MAIN);
 
     return 0;
 }
@@ -217,7 +217,7 @@ int pthread_join(pthread_t th, void **thread_return)
 
     switch (other->status) {
         case (PTS_RUNNING):
-            other->joining_thread = thread_pid;
+            other->joining_thread = sched_active_pid;
             /* go blocked, I'm waking up if other thread exits */
             thread_sleep();
             /* no break */
@@ -265,7 +265,7 @@ pthread_t pthread_self(void)
 {
     pthread_t result = 0;
     mutex_lock(&pthread_mutex);
-    int pid = thread_pid; /* thread_pid is volatile */
+    int pid = sched_active_pid; /* sched_active_pid is volatile */
     for (int i = 0; i < MAXTHREADS; i++) {
         if (pthread_sched_threads[i] && pthread_sched_threads[i]->thread_pid == pid) {
             result = i+1;

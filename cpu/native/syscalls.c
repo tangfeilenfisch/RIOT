@@ -4,7 +4,7 @@
  * Wrap system calls and system call invoking library calls to make
  * sure no context switches happen during a system call.
  *
- * Copyright (C) 2013 Ludwig Ortmann
+ * Copyright (C) 2013 Ludwig Ortmann <ludwig.ortmann@fu-berlin.de>
  *
  * This file is subject to the terms and conditions of the GNU Lesser General
  * Public License. See the file LICENSE in the top level directory for more
@@ -46,7 +46,7 @@
 #endif
 #include "debug.h"
 
-extern volatile tcb_t *active_thread;
+extern volatile tcb_t *sched_active_thread;
 
 ssize_t (*real_read)(int fd, void *buf, size_t count);
 ssize_t (*real_write)(int fd, const void *buf, size_t count);
@@ -55,7 +55,7 @@ void (*real_free)(void *ptr);
 void* (*real_calloc)(size_t nmemb, size_t size);
 void* (*real_realloc)(void *ptr, size_t size);
 
-void _native_syscall_enter()
+void _native_syscall_enter(void)
 {
     _native_in_syscall++;
 #if LOCAL_DEBUG
@@ -63,7 +63,7 @@ void _native_syscall_enter()
 #endif
 }
 
-void _native_syscall_leave()
+void _native_syscall_leave(void)
 {
 #if LOCAL_DEBUG
     real_write(STDERR_FILENO, "< _native_in_syscall\n", 21);
@@ -74,12 +74,12 @@ void _native_syscall_leave()
             && (_native_in_isr == 0)
             && (_native_in_syscall == 0)
             && (native_interrupts_enabled == 1)
-            && (active_thread != NULL)
+            && (sched_active_thread != NULL)
        )
     {
         _native_in_isr = 1;
         dINT();
-        _native_cur_ctx = (ucontext_t *)active_thread->sp;
+        _native_cur_ctx = (ucontext_t *)sched_active_thread->sp;
         native_isr_context.uc_stack.ss_sp = __isr_stack;
         native_isr_context.uc_stack.ss_size = SIGSTKSZ;
         native_isr_context.uc_stack.ss_flags = 0;
@@ -312,6 +312,12 @@ void errx(int eval, const char *fmt, ...)
     va_list argp;
     va_start(argp, fmt);
     verrx(eval, fmt, argp);
+}
+
+int getpid(void)
+{
+    warnx("not implemented");
+    return -1;
 }
 
 #ifdef MODULE_VTIMER

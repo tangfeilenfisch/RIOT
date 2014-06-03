@@ -10,3 +10,7 @@ doc/doxygen/*.log
 .*.swp
 cachegrind.out*
 tags
+.project
+.cproject
+.settings
+/toolchain

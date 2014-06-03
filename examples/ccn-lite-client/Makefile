@@ -1,5 +1,5 @@
 # name of your application
-export PROJECT = ccn-lite-client
+export APPLICATION = ccn-lite-client
 
 # If no BOARD is found in the environment, use this default:
 export BOARD ?= native
@@ -27,17 +27,14 @@ export RIOTBASE ?= $(CURDIR)/../..
 # Change this to 0 show compiler invocation lines by default:
 export QUIET ?= 1
 
-BOARD_BLACKLIST := chronos mbed_lpc1768 msb-430 msb-430h redbee-econotag \
-                   telosb wsn430-v1_3b wsn430-v1_4 pttu
-# chronos: not enough RAM
+BOARD_INSUFFICIENT_RAM := chronos msb-430h telosb wsn430-v1_3b wsn430-v1_4
+BOARD_BLACKLIST := arduino-due mbed_lpc1768 msb-430 pttu redbee-econotag udoo z1 qemu-i386
 # mbed_lpc1768: see https://github.com/RIOT-OS/RIOT/issues/675
 # msb-430: see https://github.com/RIOT-OS/RIOT/issues/658
-# msb-430h: not enough RAM
-# redbee-econotag: see https://github.com/RIOT-OS/RIOT/issues/676
-# telosb: not enough RAM
-# wsn430-v1_3b: not enough RAM
-# wsn430-v1_4: not enough RAM
 # pttu: see https://github.com/RIOT-OS/RIOT/issues/659
+# redbee-econotag: see https://github.com/RIOT-OS/RIOT/issues/676
+# z1: lacks RTC features
+# qemu-i386: no tranceiver, yet
 
 # Modules to include:
 
@@ -48,7 +45,6 @@ USEMODULE += ps
 USEMODULE += random
 USEMODULE += defaulttransceiver
 USEMODULE += rtc
-USEMODULE += crypto_sha256
 USEMODULE += ccn_lite
 USEMODULE += ccn_lite_client
 

@@ -1,4 +1,4 @@
-export PROJECT = unittests
+export APPLICATION = unittests
 include ../Makefile.tests_common
 
 USEMODULE += embunit
@@ -16,6 +16,36 @@ else ifeq ($(OUTPUT),COMPILER)
 	USEMODULE += embunit_textui
 endif
 
-.PHONY : all clean core
+ifeq (, $(filter tests-%, $(MAKECMDGOALS)))
+    UNIT_TESTS := $(shell find -mindepth 1 -maxdepth 1 -type d -name 'tests-*' -printf '%f ')
+else
+    UNIT_TESTS := $(filter tests-%, $(MAKECMDGOALS))
+endif
+
+# Pull in `Makefile.include`s from the test suites:
+-include $(UNIT_TESTS:%=$(RIOTBASE)/tests/unittests/%/Makefile.include)
 
 include $(RIOTBASE)/Makefile.include
+
+UNITTEST_LIBS := $(UNIT_TESTS:%=$(BINDIR)%.a)
+
+all: $(UNITTEST_LIBS)
+$(UNIT_TESTS): all
+
+.FORCE:
+
+$(UNITTEST_LIBS): $(BINDIR)%.a: .FORCE
+	"$(MAKE)" -C $(CURDIR)/$*
+
+charEMPTY :=
+charSPACE := $(charEMPTY) $(charEMPTY)
+charCOMMA := ,
+
+ifeq (, $(UNIT_TESTS))
+    CFLAGS += -DNO_TEST_SUITES
+    $(warning There was no test suite specified!)
+else
+    CFLAGS += -DTEST_SUITES='$(subst $(charSPACE),$(charCOMMA),$(UNIT_TESTS:tests-%=%))'
+endif
+
+BASELIBS += $(UNITTEST_LIBS)

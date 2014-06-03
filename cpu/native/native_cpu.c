@@ -4,7 +4,7 @@
  * in-process preemptive context switching utilizes POSIX ucontexts.
  * (ucontext provides for architecture independent stack handling)
  *
- * Copyright (C) 2013 Ludwig Ortmann
+ * Copyright (C) 2013 Ludwig Ortmann <ludwig.ortmann@fu-berlin.de>
  *
  * This file is subject to the terms and conditions of the GNU Lesser General
  * Public License. See the file LICENSE in the top level directory for more
@@ -54,7 +54,7 @@
 #define ENABLE_DEBUG (0)
 #include "debug.h"
 
-extern volatile tcb_t *active_thread;
+extern volatile tcb_t *sched_active_thread;
 
 ucontext_t end_context;
 char __end_stack[SIGSTKSZ];
@@ -129,12 +129,12 @@ void isr_cpu_switch_context_exit(void)
     ucontext_t *ctx;
 
     DEBUG("XXX: cpu_switch_context_exit()\n");
-    if ((sched_context_switch_request == 1) || (active_thread == NULL)) {
+    if ((sched_context_switch_request == 1) || (sched_active_thread == NULL)) {
         sched_run();
     }
 
-    DEBUG("XXX: cpu_switch_context_exit(): calling setcontext(%s)\n\n", active_thread->name);
-    ctx = (ucontext_t *)(active_thread->sp);
+    DEBUG("XXX: cpu_switch_context_exit(): calling setcontext(%s)\n\n", sched_active_thread->name);
+    ctx = (ucontext_t *)(sched_active_thread->sp);
 
     /* the next context will have interrupts enabled due to ucontext */
     DEBUG("XXX: cpu_switch_context_exit: native_interrupts_enabled = 1;\n");
@@ -147,10 +147,10 @@ void isr_cpu_switch_context_exit(void)
     errx(EXIT_FAILURE, "2 this should have never been reached!!");
 }
 
-void cpu_switch_context_exit()
+void cpu_switch_context_exit(void)
 {
 #ifdef NATIVE_AUTO_EXIT
-    if (num_tasks <= 1) {
+    if (sched_num_threads <= 1) {
         DEBUG("cpu_switch_context_exit(): last task has ended. exiting.\n");
         exit(EXIT_SUCCESS);
     }
@@ -174,13 +174,13 @@ void cpu_switch_context_exit()
     errx(EXIT_FAILURE, "3 this should have never been reached!!");
 }
 
-void isr_thread_yield()
+void isr_thread_yield(void)
 {
     DEBUG("isr_thread_yield()\n");
 
     sched_run();
-    ucontext_t *ctx = (ucontext_t *)(active_thread->sp);
-    DEBUG("isr_thread_yield(): switching to(%s)\n\n", active_thread->name);
+    ucontext_t *ctx = (ucontext_t *)(sched_active_thread->sp);
+    DEBUG("isr_thread_yield(): switching to(%s)\n\n", sched_active_thread->name);
 
     native_interrupts_enabled = 1;
     _native_in_isr = 0;
@@ -189,9 +189,9 @@ void isr_thread_yield()
     }
 }
 
-void thread_yield()
+void thread_yield(void)
 {
-    ucontext_t *ctx = (ucontext_t *)(active_thread->sp);
+    ucontext_t *ctx = (ucontext_t *)(sched_active_thread->sp);
     if (_native_in_isr == 0) {
         _native_in_isr = 1;
         dINT();
@@ -209,7 +209,7 @@ void thread_yield()
     }
 }
 
-void native_cpu_init()
+void native_cpu_init(void)
 {
     if (getcontext(&end_context) == -1) {
         err(EXIT_FAILURE, "end_context(): getcontext()");

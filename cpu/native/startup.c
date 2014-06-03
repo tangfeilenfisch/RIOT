@@ -1,7 +1,7 @@
 /**
  * Native CPU entry code
  *
- * Copyright (C) 2013 Ludwig Ortmann
+ * Copyright (C) 2013 Ludwig Ortmann <ludwig.ortmann@fu-berlin.de>
  *
  * This file is subject to the terms and conditions of the GNU Lesser General
  * Public License. See the file LICENSE in the top level directory for more
@@ -38,10 +38,13 @@
 #include "tap.h"
 
 int (*real_printf)(const char *format, ...);
+int (*real_getpid)(void);
 int _native_null_in_pipe[2];
 int _native_null_out_file;
 const char *_progname;
 char **_native_argv;
+pid_t _native_pid;
+const char *_native_unix_socket_path = NULL;
 
 /**
  * initialize _native_null_in_pipe to allow for reading from stdin
@@ -85,7 +88,7 @@ void _native_log_stdout(char *stdouttype)
     }
     else if (strcmp(stdouttype, "file") == 0) {
         char stdout_logname[255];
-        snprintf(stdout_logname, sizeof(stdout_logname), "/tmp/riot.stdout.%d", getpid());
+        snprintf(stdout_logname, sizeof(stdout_logname), "/tmp/riot.stdout.%d", _native_pid);
         if ((stdout_outfile = creat(stdout_logname, 0666)) == -1) {
             err(EXIT_FAILURE, "_native_log_stdout: open");
         }
@@ -120,7 +123,7 @@ void _native_log_stderr(char *stderrtype)
     }
     else if (strcmp(stderrtype, "file") == 0) {
         char stderr_logname[255];
-        snprintf(stderr_logname, sizeof(stderr_logname), "/tmp/riot.stderr.%d", getpid());
+        snprintf(stderr_logname, sizeof(stderr_logname), "/tmp/riot.stderr.%d", _native_pid);
         if ((stderr_outfile = creat(stderr_logname, 0666)) == -1) {
             err(EXIT_FAILURE, "_native_log_stderr: open");
         }
@@ -134,21 +137,22 @@ void _native_log_stderr(char *stderrtype)
     }
 }
 
-void daemonize()
+void daemonize(void)
 {
-    pid_t pid;
-
-    if ((pid = fork()) == -1) {
+    if ((_native_pid = fork()) == -1) {
         err(EXIT_FAILURE, "daemonize: fork");
     }
 
-    if (pid > 0) {
-        real_printf("RIOT pid: %d\n", pid);
+    if (_native_pid > 0) {
+        real_printf("RIOT pid: %d\n", _native_pid);
         exit(EXIT_SUCCESS);
+    }
+    else {
+        _native_pid = real_getpid();
     }
 }
 
-void usage_exit()
+void usage_exit(void)
 {
     real_printf("usage: %s", _progname);
 
@@ -157,7 +161,7 @@ void usage_exit()
 #endif
 
 #ifdef MODULE_UART0
-    real_printf(" [-t <port>|-u]");
+    real_printf(" [-t <port>|-u [path]]");
 #endif
 
     real_printf(" [-d] [-e|-E] [-o]\n");
@@ -174,6 +178,7 @@ void usage_exit()
 #ifdef MODULE_UART0
     real_printf("\
 -u      redirect stdio to UNIX socket\n\
+        if no path is given /tmp/riot.tty.PID is used\n\
 -t      redirect stdio to TCP socket\n");
 #endif
 
@@ -191,11 +196,12 @@ __attribute__((constructor)) static void startup(int argc, char **argv)
     *(void **)(&real_malloc) = dlsym(RTLD_NEXT, "malloc");
     *(void **)(&real_realloc) = dlsym(RTLD_NEXT, "realloc");
     *(void **)(&real_free) = dlsym(RTLD_NEXT, "free");
+    *(void **)(&real_printf) = dlsym(RTLD_NEXT, "printf");
+    *(void **)(&real_getpid) = dlsym(RTLD_NEXT, "getpid");
 
-   *(void **)(&real_printf) = dlsym(RTLD_NEXT, "printf");
-
-   _native_argv = argv;
+    _native_argv = argv;
     _progname = argv[0];
+    _native_pid = real_getpid();
 
     int argp = 1;
     char *stderrtype = "stdio";
@@ -247,7 +253,7 @@ __attribute__((constructor)) static void startup(int argc, char **argv)
 #ifdef MODULE_UART0
         else if (strcmp("-t", arg) == 0) {
             stdiotype = "tcp";
-            if (argp+1 < argc) {
+            if (argp + 1 < argc) {
                 ioparam = argv[++argp];
             }
             else {
@@ -267,6 +273,11 @@ __attribute__((constructor)) static void startup(int argc, char **argv)
             }
             if (strcmp(stderrtype, "stdio") == 0) {
                 stderrtype = "null";
+            }
+
+            /* parse optional path */
+            if ((argp + 1 < argc) && (argv[argp + 1][0] != '-')) {
+                _native_unix_socket_path = argv[++argp];
             }
         }
 #endif
