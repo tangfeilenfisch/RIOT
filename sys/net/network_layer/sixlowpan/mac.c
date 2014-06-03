@@ -316,6 +316,7 @@ int sixlowpan_mac_send_ieee802154_frame(int if_id,
 
 int sixlowpan_mac_init(void)
 {
+	/*
     int recv_pid = thread_create(radio_stack_buffer, RADIO_STACK_SIZE,
                                  PRIORITY_MAIN - 2, CREATE_STACKTEST, recv_ieee802154_frame , "radio");
     int if_id = -1;
@@ -327,4 +328,7 @@ int sixlowpan_mac_init(void)
     macdsn = rand() % 256;
 
     return recv_pid;
+    */
+    macdsn = rand() % 256;
+    return 0;
 }

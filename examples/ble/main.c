@@ -36,15 +36,23 @@
 #include "bleci.h"
 #include "blel2cap.h"
 
+#include "net_if.h"
+#include "sixlowpan.h"
+#include "sixlowpan/lowpan.h"
+
 #define RCV_BUFFER_SIZE     (64)
 #define L2CAP_STACK_SIZE    (KERNEL_CONF_STACKSIZE_DEFAULT)
 
 
 char l2cap_test_stack[L2CAP_STACK_SIZE];
-msg_t msg_q[RCV_BUFFER_SIZE];
+msg_t l2cap_msg_q[RCV_BUFFER_SIZE];
+
+static int ul_pid = -1;
 
 static void ble_l2cap_read_frame(char *pkt)
 {
+	net_if_eui64_t src, dst;
+
 	struct l2cap_fheader *frame = (struct l2cap_fheader *)pkt;
 	switch (frame->ch_id) {
 	case L2CAP_CHID_6LOWPAN:
@@ -56,8 +64,8 @@ static void ble_l2cap_read_frame(char *pkt)
 		puts("\n");
 		/*
 		TODO:
-		ble_lowpan_read(data, length, s_addr, d_addr);
 		*/
+            	lowpan_read((pkt + L2CAP_FHEADER_SIZE), frame->f_length, &src, &dst);
 		break;
 
 	case L2CAP_CHID_ATT:
@@ -78,7 +86,7 @@ void l2cap_test(void)
 {
 	msg_t m;
 
-	msg_init_queue(msg_q, RCV_BUFFER_SIZE);
+	msg_init_queue(l2cap_msg_q, RCV_BUFFER_SIZE);
 
 	while (1) {
 		msg_receive(&m);
@@ -144,7 +152,30 @@ void init_ble(void)
 	i += ll_gen_adv_data_txpwr(adv_data, i);
 	le_set_scan_response_data_cmd(i, adv_data);
 	le_set_adv_enable_cmd(1);
-	/* next: call ll_handle_ll periodical */
+
+
+
+	//int iface;
+        //iface = net_if_init_interface(0, 0x42);
+
+        //net_if_set_src_address_mode(iface, NET_IF_TRANS_ADDR_M_SHORT);
+        //net_if_set_hardware_address(iface, 0x42);
+
+
+        //if (iface >= 0) {
+        //    DEBUG("Auto init interface %d\n", iface);
+        //}
+}
+
+int transceiver_pid = 0;
+
+/* Register an upper layer thread */
+uint8_t transceiver_register(uint16_t t, int pid)
+{
+	(void)t;
+	ul_pid = pid;
+	DEBUG("l2cap: Thread %i registered\n", pid);
+	return 1;
 }
 
 static int shell_readc(void)

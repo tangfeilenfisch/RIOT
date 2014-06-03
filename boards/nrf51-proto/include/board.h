@@ -18,5 +18,6 @@
 #define PIN_DEBUG4			GPIO8
 #define PIN_DEBUG5			GPIO9
 
+typedef uint8_t radio_packet_length_t;
 /** @} */
 #endif /* __BOARD_H */

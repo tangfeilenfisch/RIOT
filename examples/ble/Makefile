@@ -32,6 +32,7 @@ export QUIET ?= 0
 USEMODULE += posix
 USEMODULE += ble
 USEMODULE += nrf51822ble
+USEMODULE += sixlowpan
 #USEMODULE += shell
 #USEMODULE += shell_commands
 #USEMODULE += ps

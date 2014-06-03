@@ -70,7 +70,7 @@ ifneq (,$(filter vtimer,$(USEMODULE)))
 endif
 
 ifneq (,$(filter net_if,$(USEMODULE)))
-	USEMODULE += transceiver
+#	USEMODULE += transceiver
 endif
 
 ifneq (,$(filter shell_commands,$(USEMODULE)))
